@@ -135,7 +135,7 @@
 
 ////////////////////////////////
 
-#define MARC_SERIAL2_BAUD_RATE 2400
+#define MARC_SERIAL2_BAUD_RATE 9600
 #define MARC_SERIAL_PASS true
 #define MARC_SERIAL_ENABLED true
 #define MARC_WIFI_ENABLED true
@@ -301,12 +301,12 @@ const ServoSettings servoSettings[] PROGMEM = {
     {13, 800, 2200, TOP_PIE_PANEL},               /* 12: dome top panel */
 
     // Second PCA9685 controller
-    {16, 800, 2200, HOLO_HSERVO}, /* 13: horizontal front holo */
-    {17, 800, 2200, HOLO_VSERVO}, /* 14: vertical front holo */
-    {18, 800, 2200, HOLO_HSERVO}, /* 15: horizontal top holo */
-    {19, 800, 2200, HOLO_VSERVO}, /* 16: vertical top holo */
-    {20, 800, 2200, HOLO_VSERVO}, /* 17: vertical rear holo */
-    {21, 800, 2200, HOLO_HSERVO}, /* 18: horizontal rear holo */
+    {17, 800, 2200, HOLO_HSERVO}, /* 13: horizontal front holo */
+    {18, 800, 2200, HOLO_VSERVO}, /* 14: vertical front holo */
+    {19, 800, 2200, HOLO_HSERVO}, /* 15: horizontal top holo */
+    {20, 800, 2200, HOLO_VSERVO}, /* 16: vertical top holo */
+    {21, 800, 2200, HOLO_VSERVO}, /* 17: vertical rear holo */
+    {22, 800, 2200, HOLO_HSERVO}, /* 18: horizontal rear holo */
 #endif
 };
 
@@ -458,6 +458,7 @@ bool numberparams(const char *cmd, uint8_t &argcount, int32_t *args, uint8_t max
 ////////////////////////////////
 
 #include "MarcduinoHolo.h"
+#include "FlthyHoloExtras.h"
 #include "MarcduinoLogics.h"
 #include "MarcduinoSequence.h"
 #include "MarcduinoPanel.h"
@@ -654,16 +655,16 @@ void setup()
     // Assign servos to holo projectors
     frontHolo.assignServos(&servoDispatch, 13, 14);
     // Second PCA9685 controller
-    // { 16, 800, 2200, HOLO_HSERVO },                /* 13: horizontal front holo */
-    // { 17, 800, 2200, HOLO_VSERVO },                /* 14: vertical front holo */
+    // { 17, 800, 2200, HOLO_HSERVO },                /* 13: horizontal front holo */
+    // { 18, 800, 2200, HOLO_VSERVO },                /* 14: vertical front holo */
 
     topHolo.assignServos(&servoDispatch, 15, 16);
-    // { 18, 800, 2200, HOLO_HSERVO },                /* 15: horizontal top holo */
-    // { 19, 800, 2200, HOLO_VSERVO },                /* 16: vertical top holo */
+    // { 19, 800, 2200, HOLO_HSERVO },                /* 15: horizontal top holo */
+    // { 20, 800, 2200, HOLO_VSERVO },                /* 16: vertical top holo */
 
     rearHolo.assignServos(&servoDispatch, 17, 18);
-    // { 20, 800, 2200, HOLO_VSERVO },                /* 17: vertical rear holo */
-    // { 21, 800, 2200, HOLO_HSERVO },                /* 18: horizontal rear holo */
+    // { 21, 800, 2200, HOLO_VSERVO },                /* 17: vertical rear holo */
+    // { 22, 800, 2200, HOLO_HSERVO },                /* 18: horizontal rear holo */
 
 #ifdef USE_WIFI
     if (remoteEnabled)
