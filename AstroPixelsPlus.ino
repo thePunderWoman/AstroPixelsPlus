@@ -870,6 +870,9 @@ void setup()
     sMarcSound.setRandomMax(preferences.getInt(PREFERENCE_MARCSOUND_RANDOM_MAX, MARC_SOUND_RANDOM_MAX));
     if (preferences.getInt(PREFERENCE_MARCSOUND_RANDOM, MARC_SOUND_RANDOM))
         sMarcSound.startRandomInSeconds(13);
+
+    // Start all holos in random mode loop on boot
+    CommandEvent::process(F("HPS9"));
 }
 
 ////////////////
