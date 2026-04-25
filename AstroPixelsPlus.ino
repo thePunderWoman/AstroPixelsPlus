@@ -286,19 +286,19 @@ HoloLights topHolo(PIN_TOP_HOLO, HoloLights::kRGB, 3);
 const ServoSettings servoSettings[] PROGMEM = {
 #ifndef USE_I2C_ADDRESS
     // First PCA9685 controller
-    {1, 1400, 2100, PANEL_GROUP_4 | SMALL_PANEL},  /* 0: door 4 */
-    {2, 1400, 2100, PANEL_GROUP_3 | SMALL_PANEL},  /* 1: door 3 */
-    {3, 1400, 2100, PANEL_GROUP_2 | SMALL_PANEL},  /* 2: door 2 */
-    {4, 1400, 2100, PANEL_GROUP_1 | SMALL_PANEL},  /* 3: door 1 */
-    {5, 1400, 2100, PANEL_GROUP_5 | MEDIUM_PANEL}, /* 4: door 5 */
-    {6, 1400, 2100, PANEL_GROUP_6 | BIG_PANEL},    /* 5: door 9 */
-    {7, 1400, 2100, MINI_PANEL},                   /* 6: mini door 2 */
-    {8, 1400, 2100, MINI_PANEL},                   /* 7: mini front psi door */
-    {9, 1400, 2100, PANEL_GROUP_10 | PIE_PANEL},   /* 8: pie panel 1 */
-    {10, 1400, 2100, PANEL_GROUP_9 | PIE_PANEL},   /* 9: pie panel 2 */
-    {11, 1400, 2100, PANEL_GROUP_8 | PIE_PANEL},   /* 10: pie panel 3 */
-    {12, 1400, 2100, PANEL_GROUP_7 | PIE_PANEL},   /* 11: pie panel 4 */
-    {13, 1400, 2100, TOP_PIE_PANEL},               /* 12: dome top panel */
+    {1, 1400, 2200, PANEL_GROUP_4 | SMALL_PANEL},  /* 0: door 4 */
+    {2, 1400, 2200, PANEL_GROUP_3 | SMALL_PANEL},  /* 1: door 3 */
+    {3, 1400, 2200, PANEL_GROUP_2 | SMALL_PANEL},  /* 2: door 2 */
+    {4, 1400, 2200, PANEL_GROUP_1 | SMALL_PANEL},  /* 3: door 1 */
+    {5, 1400, 2200, PANEL_GROUP_5 | MEDIUM_PANEL}, /* 4: door 5 */
+    {6, 1400, 2200, PANEL_GROUP_6 | BIG_PANEL},    /* 5: door 9 */
+    {7, 1400, 2200, MINI_PANEL},                   /* 6: mini door 2 */
+    {8, 1400, 2200, MINI_PANEL},                   /* 7: mini front psi door */
+    {9, 1400, 2200, PANEL_GROUP_10 | PIE_PANEL},   /* 8: pie panel 1 */
+    {10, 1400, 2200, PANEL_GROUP_9 | PIE_PANEL},   /* 9: pie panel 2 */
+    {11, 1400, 2200, PANEL_GROUP_8 | PIE_PANEL},   /* 10: pie panel 3 */
+    {12, 1400, 2200, PANEL_GROUP_7 | PIE_PANEL},   /* 11: pie panel 4 */
+    {13, 1400, 2200, TOP_PIE_PANEL},               /* 12: dome top panel */
 
     // Second PCA9685 controller
     {17, 800, 2200, HOLO_HSERVO}, /* 13: horizontal front holo */

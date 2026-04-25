@@ -47,7 +47,7 @@
 // Panel position values (pulse width in microseconds).
 // servoSettings uses 800–2200 µs; tune PANEL_OPEN / PANEL_CLOSE for your panels.
 // =============================================================================
-#define DOME_PANEL_OPEN      2100
+#define DOME_PANEL_OPEN      2200
 #define DOME_PANEL_CLOSE     1400
 #define DOME_PANEL_RANGE     (DOME_PANEL_OPEN - DOME_PANEL_CLOSE)
 #define DOME_PANEL_75_OPEN   (DOME_PANEL_CLOSE + (DOME_PANEL_RANGE * 3 / 4))
@@ -424,22 +424,22 @@ static void domeFlutter()
 {
     domeBeginSequence(10);
 
-    domeMove(P1,  DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
-    domeMove(P2,  DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
-    domeMove(P3,  DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P1,  DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P2,  DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P3,  DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
     domeWaitTime(20);
-    domeMove(P4,  DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P4,  DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
     domeWaitTime(20);
-    domeMove(P7,  DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
-    domeMove(P10, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
-    domeMove(P11, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
-    domeMove(P13, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P7,  DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P10, DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P11, DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P13, DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
 
-    domeMove(PP2, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
-    domeMove(PP1, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
-    domeMove(PP6, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(PP2, DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(PP1, DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(PP6, DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
     domeWaitTime(20);
-    domeMove(PP5, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(PP5, DOME_PANEL_75_OPEN, DOME_MOVE_SPEED, true);
 
     domeMove(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
     domeMove(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
@@ -681,11 +681,11 @@ static void domeHelloThere()
 
     domeMove(P1, DOME_PANEL_OPEN,     DOME_MOVE_SPEED, true);
     domeWaitTime(10);
-    domeMove(P1, DOME_PANEL_25_OPEN,  DOME_MOVE_SPEED, true);
+    domeMove(P1, DOME_PANEL_50_OPEN,  DOME_MOVE_SPEED, true);
     domeWaitTime(10);
     domeMove(P1, DOME_PANEL_OPEN,     DOME_MOVE_SPEED, true);
     domeWaitTime(10);
-    domeMove(P1, DOME_PANEL_25_OPEN,  DOME_MOVE_SPEED, true);
+    domeMove(P1, DOME_PANEL_50_OPEN,  DOME_MOVE_SPEED, true);
     domeWaitTime(10);
     domeMove(P1, DOME_PANEL_OPEN,     DOME_MOVE_SPEED, true);
     domeWaitTime(10);
