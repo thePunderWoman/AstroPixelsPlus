@@ -873,3 +873,34 @@ MARCDUINO_ACTION(DomeOverload, DM:OVERLOAD,({ if (!dome_seqRunning) domeOverload
 MARCDUINO_ACTION(DomeBloom,    DM:BLOOM,   ({ if (!dome_seqRunning) domeBloom();         }))
 MARCDUINO_ACTION(DomeCantina,  DM:CANTINA, ({ if (!dome_seqRunning) domeCantina();       }))
 MARCDUINO_ACTION(DomeAlarm,    DM:ALARM,   ({ if (!dome_seqRunning) domeAlarm();         }))
+
+// =============================================================================
+// MarcduinoSequence.h aliases — expose predefined SE sequences via DM: names
+//
+// These forward to the corresponding :SE## / $### commands so all sequences
+// are reachable with a single consistent "DM:" prefix.
+//
+// Conflicts with dome-local sequences (SCREAM, CANTINA, LEIA) get an "SE"
+// prefix to make clear they are the standard Marcduino versions.
+// =============================================================================
+MARCDUINO_ACTION(DomeSeqStop,           DM:STOP,           ({ CommandEvent::process(":SE00"); }))
+MARCDUINO_ACTION(DomeSeqScream,         DM:SESCREAM,       ({ CommandEvent::process(":SE01"); }))
+MARCDUINO_ACTION(DomeSeqWave,           DM:WAVE,           ({ CommandEvent::process(":SE02"); }))
+MARCDUINO_ACTION(DomeSeqSmirkWave,      DM:SMIRKWAVE,      ({ CommandEvent::process(":SE03"); }))
+MARCDUINO_ACTION(DomeSeqOCWave,         DM:OCWAVE,         ({ CommandEvent::process(":SE04"); }))
+MARCDUINO_ACTION(DomeSeqBeepCantina,    DM:BEEPCANTINA,    ({ CommandEvent::process(":SE05"); }))
+MARCDUINO_ACTION(DomeSeqShort,          DM:SHORT,          ({ CommandEvent::process(":SE06"); }))
+MARCDUINO_ACTION(DomeSeqSecantina,      DM:SECANTINA,      ({ CommandEvent::process(":SE07"); }))
+MARCDUINO_ACTION(DomeSeqSeleia,         DM:SELEIA,         ({ CommandEvent::process(":SE08"); }))
+MARCDUINO_ACTION(DomeSeqDisco,          DM:DISCO,          ({ CommandEvent::process(":SE09"); }))
+MARCDUINO_ACTION(DomeSeqScreamNoPanel,  DM:SCREAMNOPANEL,  ({ CommandEvent::process(":SE50"); }))
+MARCDUINO_ACTION(DomeSeqScreamPanel,    DM:SCREAMPANEL,    ({ CommandEvent::process(":SE51"); }))
+MARCDUINO_ACTION(DomeSeqWavePanel,      DM:WAVEPANEL,      ({ CommandEvent::process(":SE52"); }))
+MARCDUINO_ACTION(DomeSeqSmirkWavePanel, DM:SMIRKWAVEPANEL, ({ CommandEvent::process(":SE53"); }))
+MARCDUINO_ACTION(DomeSeqOpenWave,       DM:OPENWAVE,       ({ CommandEvent::process(":SE54"); }))
+MARCDUINO_ACTION(DomeSeqMarchingAnts,   DM:MARCHINGANTS,   ({ CommandEvent::process(":SE55"); }))
+MARCDUINO_ACTION(DomeSeqFaint,          DM:FAINT,          ({ CommandEvent::process(":SE56"); }))
+MARCDUINO_ACTION(DomeSeqRythmic,        DM:RYTHMIC,        ({ CommandEvent::process(":SE57"); }))
+MARCDUINO_ACTION(DomeSeqHarlemShake,    DM:HARLEMSHAKE,    ({ CommandEvent::process("$815"); }))
+MARCDUINO_ACTION(DomeSeqGirlOnFire,     DM:GIRLONFIRE,     ({ CommandEvent::process("$821"); }))
+MARCDUINO_ACTION(DomeSeqYoda,           DM:YODA,           ({ CommandEvent::process("$720"); }))
