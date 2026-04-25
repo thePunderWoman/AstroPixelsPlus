@@ -483,7 +483,7 @@ WAPI consoleSendAPI("/api/send", [](Print& out, String query) {
         String cmd = webUrlDecode((end >= 0) ? query.substring(idx+4, end) : query.substring(idx+4));
         if (cmd.length() > 0) {
             webConsoleLog(">>> " + cmd);
-            CommandEvent::process(cmd.c_str());
+            Marcduino::processCommand(player, cmd.c_str());
             json = "{\"ok\":true}";
         }
     }
