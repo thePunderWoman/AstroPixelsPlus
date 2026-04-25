@@ -668,6 +668,60 @@ static void domeAlarm()
 }
 
 // =============================================================================
+// Disco — disco song
+// =============================================================================
+static void domeDisco()
+{
+    domeBeginSequence(46);
+
+    CommandEvent::process(":SE09");
+
+    domeSendToBody("DISCO");
+
+    domeEndSequence();
+}
+
+// =============================================================================
+// Vader — imperial march
+// =============================================================================
+static void domeVader()
+{
+    domeBeginSequence(47);
+
+    CommandEvent::process(F("HPA0021|47")); // all holos red flashes
+
+    FLD.selectSequence(LogicEngineRenderer::MARCH, FLD.kRed, 0, 47);
+    RLD.selectSequence(LogicEngineRenderer::MARCH, RLD.kRed, 0, 47);
+
+    COMMAND_SERIAL.println("4T11");
+    COMMAND_SERIAL.println("5T11");
+
+    domeSendToBody("VADER");
+
+    domeEndSequence();
+}
+
+// =============================================================================
+// Rock March — alt imperial march
+// =============================================================================
+static void domeRockMarch()
+{
+    domeBeginSequence(47);
+
+    CommandEvent::process(F("HPA0021|47")); // all holos red flashes
+
+    FLD.selectSequence(LogicEngineRenderer::MARCH, FLD.kRed, 0, 47);
+    RLD.selectSequence(LogicEngineRenderer::MARCH, RLD.kRed, 0, 47);
+
+    COMMAND_SERIAL.println("4T11");
+    COMMAND_SERIAL.println("5T11");
+
+    domeSendToBody("ROCKMARCH");
+
+    domeEndSequence();
+}
+
+// =============================================================================
 // Hello There — P1 waves a greeting
 // =============================================================================
 static void domeHelloThere()
@@ -854,25 +908,50 @@ static void domeCantina()
     domeEndSequence();
 }
 
+static void domeRandom()
+{
+    static const char* const sequences[] = {
+        ":SE02",  // Wave
+        ":SE03",  // SmirkWave
+        ":SE04",  // OpenCloseWave
+        ":SE05",  // BeepCantina
+        ":SE06",  // Short
+        ":SE52",  // WavePanel
+        ":SE53",  // SmirkWavePanel
+        ":SE54",  // OpenWave
+        ":SE55",  // MarchingAnts
+        ":SE56",  // Faint
+        ":SE57",  // Rythmic
+        "$815",   // HarlemShake
+        "$821",   // GirlOnFire
+        "$720",   // YodaClearMind
+    };
+    static const uint8_t count = sizeof(sequences) / sizeof(sequences[0]);
+    CommandEvent::process(sequences[random(count)]);
+}
+
 // =============================================================================
 // Marcduino serial command handlers — prefix "DM:" on COMMAND_SERIAL
 //
 // Send from any Marcduino-compatible device as:   DM:PIES\r
 // =============================================================================
 
-MARCDUINO_ACTION(DomeReset,    DM:RESET,   ({ if (!dome_seqRunning) domeResetAll();    }))
-MARCDUINO_ACTION(DomePies,     DM:PIES,    ({ if (!dome_seqRunning) domeOpenClosePies(); }))
-MARCDUINO_ACTION(DomeLow,      DM:LOW,     ({ if (!dome_seqRunning) domeOpenCloseLow();  }))
-MARCDUINO_ACTION(DomeOpenAll,  DM:OPENALL, ({ if (!dome_seqRunning) domeOpenCloseAll();  }))
-MARCDUINO_ACTION(DomeLeia,     DM:LEIA,    ({ if (!dome_seqRunning) domeLeiaMode();      }))
-MARCDUINO_ACTION(DomeHeart,    DM:HEART,   ({ if (!dome_seqRunning) domeHeart();         }))
-MARCDUINO_ACTION(DomeHello,    DM:HELLO,   ({ if (!dome_seqRunning) domeHelloThere();    }))
-MARCDUINO_ACTION(DomeScream,   DM:SCREAM,  ({ if (!dome_seqRunning) domeScream();        }))
-MARCDUINO_ACTION(DomeFlutter,  DM:FLUTTER, ({ if (!dome_seqRunning) domeFlutter();       }))
-MARCDUINO_ACTION(DomeOverload, DM:OVERLOAD,({ if (!dome_seqRunning) domeOverload();      }))
-MARCDUINO_ACTION(DomeBloom,    DM:BLOOM,   ({ if (!dome_seqRunning) domeBloom();         }))
-MARCDUINO_ACTION(DomeCantina,  DM:CANTINA, ({ if (!dome_seqRunning) domeCantina();       }))
-MARCDUINO_ACTION(DomeAlarm,    DM:ALARM,   ({ if (!dome_seqRunning) domeAlarm();         }))
+MARCDUINO_ACTION(DomeReset,     DM:RESET,       ({ if (!dome_seqRunning) domeResetAll();      }))
+MARCDUINO_ACTION(DomePies,      DM:PIES,        ({ if (!dome_seqRunning) domeOpenClosePies(); }))
+MARCDUINO_ACTION(DomeLow,       DM:LOW,         ({ if (!dome_seqRunning) domeOpenCloseLow();  }))
+MARCDUINO_ACTION(DomeOpenAll,   DM:OPENALL,     ({ if (!dome_seqRunning) domeOpenCloseAll();  }))
+MARCDUINO_ACTION(DomeLeia,      DM:LEIA,        ({ if (!dome_seqRunning) domeLeiaMode();      }))
+MARCDUINO_ACTION(DomeHeart,     DM:HEART,       ({ if (!dome_seqRunning) domeHeart();         }))
+MARCDUINO_ACTION(DomeHello,     DM:HELLO,       ({ if (!dome_seqRunning) domeHelloThere();    }))
+MARCDUINO_ACTION(DomeScream,    DM:SCREAM,      ({ if (!dome_seqRunning) domeScream();        }))
+MARCDUINO_ACTION(DomeFlutter,   DM:FLUTTER,     ({ if (!dome_seqRunning) domeFlutter();       }))
+MARCDUINO_ACTION(DomeOverload,  DM:OVERLOAD,    ({ if (!dome_seqRunning) domeOverload();      }))
+MARCDUINO_ACTION(DomeBloom,     DM:BLOOM,       ({ if (!dome_seqRunning) domeBloom();         }))
+MARCDUINO_ACTION(DomeCantina,   DM:CANTINA,     ({ if (!dome_seqRunning) domeCantina();       }))
+MARCDUINO_ACTION(DomeAlarm,     DM:ALARM,       ({ if (!dome_seqRunning) domeAlarm();         }))
+MARCDUINO_ACTION(DomeSeqDisco,  DM:DISCO,       ({ if (!dome_seqRunning) domeDisco();         }))
+MARCDUINO_ACTION(DomeRockMarch, DM:ROCKMARCH,   ({ if (!dome_seqRunning) domeRockMarch();     }))
+MARCDUINO_ACTION(DomeRandom,    DM:RANDOM,      ({ if (!dome_seqRunning) domeRandom();        }))
 
 // =============================================================================
 // MarcduinoSequence.h aliases — expose predefined SE sequences via DM: names
@@ -892,7 +971,6 @@ MARCDUINO_ACTION(DomeSeqBeepCantina,    DM:BEEPCANTINA,    ({ CommandEvent::proc
 MARCDUINO_ACTION(DomeSeqShort,          DM:SHORT,          ({ CommandEvent::process(":SE06"); }))
 MARCDUINO_ACTION(DomeSeqSecantina,      DM:SECANTINA,      ({ CommandEvent::process(":SE07"); }))
 MARCDUINO_ACTION(DomeSeqSeleia,         DM:SELEIA,         ({ CommandEvent::process(":SE08"); }))
-MARCDUINO_ACTION(DomeSeqDisco,          DM:DISCO,          ({ CommandEvent::process(":SE09"); }))
 MARCDUINO_ACTION(DomeSeqScreamNoPanel,  DM:SCREAMNOPANEL,  ({ CommandEvent::process(":SE50"); }))
 MARCDUINO_ACTION(DomeSeqScreamPanel,    DM:SCREAMPANEL,    ({ CommandEvent::process(":SE51"); }))
 MARCDUINO_ACTION(DomeSeqWavePanel,      DM:WAVEPANEL,      ({ CommandEvent::process(":SE52"); }))
