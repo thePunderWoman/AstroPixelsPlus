@@ -294,10 +294,10 @@ const ServoSettings servoSettings[] PROGMEM = {
     {6, 1400, 2200, PANEL_GROUP_6 | BIG_PANEL},    /* 5: door 9 */
     {7, 1400, 2200, MINI_PANEL},                   /* 6: mini door 2 */
     {8, 1400, 2200, MINI_PANEL},                   /* 7: mini front psi door */
-    {9, 1400, 2200, PANEL_GROUP_10 | PIE_PANEL},   /* 8: pie panel 1 */
-    {10, 1400, 2200, PANEL_GROUP_9 | PIE_PANEL},   /* 9: pie panel 2 */
-    {11, 1400, 2200, PANEL_GROUP_8 | PIE_PANEL},   /* 10: pie panel 3 */
-    {12, 1400, 2200, PANEL_GROUP_7 | PIE_PANEL},   /* 11: pie panel 4 */
+    {9, 1400, 2050, PANEL_GROUP_10 | PIE_PANEL},   /* 8: pie panel 1 */
+    {10, 1400, 2050, PANEL_GROUP_9 | PIE_PANEL},   /* 9: pie panel 2 */
+    {11, 1400, 2050, PANEL_GROUP_8 | PIE_PANEL},   /* 10: pie panel 3 */
+    {12, 1400, 2050, PANEL_GROUP_7 | PIE_PANEL},   /* 11: pie panel 4 */
     {13, 1400, 2200, TOP_PIE_PANEL},               /* 12: dome top panel */
 
     // Second PCA9685 controller
@@ -521,6 +521,7 @@ CommandScreenHandlerSMQ sDisplay;
 ////////////////////////////////
 
 #ifdef USE_WIFI_WEB
+#include "WebConsole.h"
 #include "WebPages.h"
 #endif
 
@@ -777,6 +778,9 @@ void setup()
             wifiMarcduinoReceiver.setCommandHandler([](const char *cmd)
                                                     {
                 printf("cmd: %s\n", cmd);
+#ifdef USE_WIFI_WEB
+                webConsoleLog(String("[WiFi] ") + cmd);
+#endif
                 Marcduino::processCommand(player, cmd);
                 if (preferences.getBool(PREFERENCE_MARCWIFI_SERIAL_PASS, MARC_WIFI_SERIAL_PASS))
                 {
@@ -1111,6 +1115,9 @@ void mainLoop()
         // ================================================================
         if (ch == 0x0A || ch == 0x0D)
         {
+#ifdef USE_WIFI_WEB
+            if (sPos > 0) webConsoleLog(String("[USB] ") + sBuffer);
+#endif
             Marcduino::processCommand(player, sBuffer);
             sPos = 0;
         }

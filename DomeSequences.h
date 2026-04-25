@@ -48,6 +48,7 @@
 // servoSettings uses 800–2200 µs; tune PANEL_OPEN / PANEL_CLOSE for your panels.
 // =============================================================================
 #define DOME_PANEL_OPEN      2200
+#define DOME_PIE_PANEL_OPEN  2050
 #define DOME_PANEL_CLOSE     1400
 #define DOME_PANEL_RANGE     (DOME_PANEL_OPEN - DOME_PANEL_CLOSE)
 #define DOME_PANEL_75_OPEN   (DOME_PANEL_CLOSE + (DOME_PANEL_RANGE * 3 / 4))
@@ -230,20 +231,20 @@ static void domeOpenClosePies()
         for (int i = 0; i < 2; i++)
         {
             // wave open
-            domeMove(PP2, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
-            domeMove(PP1, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
-            domeMove(PP6, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
-            domeMove(PP5, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP2, DOME_PIE_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP1, DOME_PIE_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP6, DOME_PIE_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP5, DOME_PIE_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
             // wave close
             domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED, true);
             domeMove(PP6, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED, true);
             domeMove(PP1, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED, true);
             domeMove(PP2, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED, true);
             // reopen
-            domeMove(PP2, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
-            domeMove(PP1, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
-            domeMove(PP6, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
-            domeMove(PP5, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP2, DOME_PIE_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP1, DOME_PIE_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP6, DOME_PIE_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP5, DOME_PIE_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
         }
 
         domeWaitTime(1000);
@@ -371,10 +372,10 @@ static void domeOpenCloseAll()
         domeSendToBody("HAPPY");
 
         // open pies
-        domeMove(PP2, DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
-        domeMove(PP5, DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
-        domeMove(PP1, DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
-        domeMove(PP6, DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
+        domeMove(PP2, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED, true);
+        domeMove(PP5, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED, true);
+        domeMove(PP1, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED, true);
+        domeMove(PP6, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED, true);
 
         // open lows (non-blocking except last)
         domeMove(P10, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
@@ -399,10 +400,10 @@ static void domeOpenCloseAll()
             domeWaitTime(100);
 
             domeMove(PP2, DOME_PANEL_75_OPEN, DOME_MOVE_FASTSPEED, true);
-            domeMove(PP2, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
+            domeMove(PP2, DOME_PIE_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
             domeWaitTime(80);
             domeMove(PP5, DOME_PANEL_75_OPEN, DOME_MOVE_FASTSPEED, true);
-            domeMove(PP5, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
+            domeMove(PP5, DOME_PIE_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
         }
 
         domeWaitTime(800);
@@ -486,8 +487,8 @@ static void domeBloom()
 
     for (uint8_t i = 0; i < 3; i++)
     {
-        domeEaseSineInOut(pies, 4, DOME_PANEL_OPEN, 1900, 130);
-        domeEaseSineInOut(pies, 4, 1900, DOME_PANEL_OPEN, 130);
+        domeEaseSineInOut(pies, 4, DOME_PIE_PANEL_OPEN, 1900, 130);
+        domeEaseSineInOut(pies, 4, 1900, DOME_PIE_PANEL_OPEN, 130);
     }
 
     domeWaitTime(1000);
@@ -525,10 +526,10 @@ static void domeScream()
     dome_AllOpen = true;
 
     // burst open
-    domeMove(PP2, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-    domeMove(PP5, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-    domeMove(PP1, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-    domeMove(PP6, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+    domeMove(PP2, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED);
+    domeMove(PP5, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED);
+    domeMove(PP1, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED);
+    domeMove(PP6, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED);
     domeMove(P10, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
     domeMove(P11, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
     domeMove(P13, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
@@ -546,10 +547,10 @@ static void domeScream()
     {
         uint8_t idx = allPanels[random(12)];
         domeMove(idx, DOME_PANEL_50_OPEN, DOME_MOVE_FASTSPEED, true);
-        domeMove(idx, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
+        domeMove(idx, DOME_PIE_PANEL_OPEN, DOME_MOVE_FASTSPEED);
         domeWaitTime(80);
         domeMove(idx, DOME_PANEL_50_OPEN, DOME_MOVE_FASTSPEED, true);
-        domeMove(idx, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
+        domeMove(idx, DOME_PIE_PANEL_OPEN, DOME_MOVE_FASTSPEED);
         domeWaitTime(100);
     }
 
@@ -843,8 +844,8 @@ static void domeCantina()
     {
         if (evenOpen)
         {
-            domeMove(PP1, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-            domeMove(PP5, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(PP1, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(PP5, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED);
             domeMove(PP2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
             domeMove(PP6, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
             domeMove(P1, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
@@ -860,8 +861,8 @@ static void domeCantina()
         {
             domeMove(PP1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
             domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMove(PP2, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-            domeMove(PP6, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(PP2, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(PP6, DOME_PIE_PANEL_OPEN, DOME_MOVE_SPEED);
             domeMove(P1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
             domeMove(P3, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
             domeMove(P7, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
@@ -952,6 +953,7 @@ MARCDUINO_ACTION(DomeAlarm,     DM:ALARM,       ({ if (!dome_seqRunning) domeAla
 MARCDUINO_ACTION(DomeSeqDisco,  DM:DISCO,       ({ if (!dome_seqRunning) domeDisco();         }))
 MARCDUINO_ACTION(DomeRockMarch, DM:ROCKMARCH,   ({ if (!dome_seqRunning) domeRockMarch();     }))
 MARCDUINO_ACTION(DomeRandom,    DM:RANDOM,      ({ if (!dome_seqRunning) domeRandom();        }))
+MARCDUINO_ACTION(DomeVader,     DM:VADER,       ({ if (!dome_seqRunning) domeVader();         }))
 
 // =============================================================================
 // MarcduinoSequence.h aliases — expose predefined SE sequences via DM: names

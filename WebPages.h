@@ -1,6 +1,7 @@
 #ifdef USE_WIFI_WEB
 
 #include "web-images.h"
+#include "WebConsole.h"
 
 ////////////////////////////////
 // List of available sequences by name and matching id
@@ -27,6 +28,7 @@ WMenuData setupMenu[] = {
     { "WiFi", "/wifi" },
     { "Remote", "/remote" },
     { "Firmware", "/firmware" },
+    { "Console", "/console" },
     { "Back", "/" }
 };
 
@@ -398,6 +400,102 @@ WElement firmwareContents[] = {
     rseriesSVG
 };
 
+////////////////////////////////
+
+WElement consoleContents[] = {
+    WHTML(R"HTML(
+<div style="max-width:900px;margin:0 auto;padding:10px;font-family:sans-serif;text-align:left">
+<h2 style="text-align:center">Serial Console</h2>
+<div id="term" style="background:#1e1e1e;color:#d4d4d4;font-family:monospace;font-size:13px;
+  height:420px;overflow-y:auto;padding:8px;border-radius:4px;white-space:pre-wrap;
+  word-break:break-all;border:1px solid #444"></div>
+<div style="display:flex;margin-top:8px;gap:8px">
+  <input id="cmdin" type="text" placeholder="e.g. DM:SCREAM or :SE01"
+    style="flex:1;padding:8px;font-family:monospace;font-size:13px;
+      border:1px solid #555;border-radius:4px;background:#2d2d2d;color:#d4d4d4"
+    onkeydown="if(event.key==='Enter')sendCmd()">
+  <button onclick="sendCmd()"
+    style="padding:8px 16px;background:#007acc;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px">Send</button>
+  <button onclick="document.getElementById('term').innerHTML=''"
+    style="padding:8px 16px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px">Clear</button>
+</div>
+<p style="margin-top:8px;font-size:12px;color:#888;text-align:center">
+  <a href="/" style="color:#888">Home</a> &bull;
+  <a href="/setup" style="color:#888">Setup</a>
+</p>
+</div>
+)HTML"),
+    WJavaScript(R"JS(
+var cseq=0,term=document.getElementById('term');
+function ts(){var d=new Date();return d.toTimeString().substr(0,8);}
+function addLine(t,c){
+  var div=document.createElement('div');
+  div.style.color=c||'#d4d4d4';
+  div.textContent='['+ts()+'] '+t;
+  term.appendChild(div);
+  term.scrollTop=term.scrollHeight;
+}
+function pollLog(){
+  fetch('/api/log?since='+cseq+'&')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.lines)d.lines.forEach(function(l){addLine(l,null);});
+      cseq=d.seq;
+    })
+    .catch(function(){})
+    .finally(function(){setTimeout(pollLog,1000);});
+}
+function sendCmd(){
+  var inp=document.getElementById('cmdin'),cmd=inp.value.trim();
+  if(!cmd)return;
+  fetch('/api/send?cmd='+encodeURIComponent(cmd)+'&')
+    .then(function(r){return r.json();})
+    .catch(function(){});
+  inp.value='';
+}
+addLine('Console ready — polling every 1s','#57a64a');
+pollLog();
+)JS"),
+};
+
+WAPI consoleLogAPI("/api/log", [](Print& out, String query) {
+    int since = 0;
+    int idx = query.indexOf("since=");
+    if (idx >= 0) {
+        int end = query.indexOf('&', idx);
+        since = ((end >= 0) ? query.substring(idx+6, end) : query.substring(idx+6)).toInt();
+    }
+    String json = webConsoleJSON(since);
+    out.println("HTTP/1.0 200 OK");
+    out.println("Content-type:application/json");
+    out.println("Cache-Control: no-cache");
+    out.println("Connection: close");
+    out.print("Content-Length:"); out.println(json.length());
+    out.println();
+    out.print(json);
+});
+
+WAPI consoleSendAPI("/api/send", [](Print& out, String query) {
+    String json = "{\"ok\":false}";
+    int idx = query.indexOf("cmd=");
+    if (idx >= 0) {
+        int end = query.indexOf('&', idx+4);
+        String cmd = webUrlDecode((end >= 0) ? query.substring(idx+4, end) : query.substring(idx+4));
+        if (cmd.length() > 0) {
+            webConsoleLog(">>> " + cmd);
+            CommandEvent::process(cmd.c_str());
+            json = "{\"ok\":true}";
+        }
+    }
+    out.println("HTTP/1.0 200 OK");
+    out.println("Content-type:application/json");
+    out.println("Cache-Control: no-cache");
+    out.println("Connection: close");
+    out.print("Content-Length:"); out.println(json.length());
+    out.println();
+    out.print(json);
+});
+
 //////////////////////////////////////////////////////////////////
 
 WPage pages[] = {
@@ -409,6 +507,9 @@ WPage pages[] = {
       WPage("/wifi", wifiContents, SizeOfArray(wifiContents)),
       WPage("/remote", remoteContents, SizeOfArray(remoteContents)),
       WPage("/firmware", firmwareContents, SizeOfArray(firmwareContents)),
+      WPage("/console", consoleContents, SizeOfArray(consoleContents), "Console"),
+    consoleLogAPI,
+    consoleSendAPI,
         WUpload("/upload/firmware",
             [](Client& client)
             {
