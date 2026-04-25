@@ -47,13 +47,12 @@
 // Panel position values (pulse width in microseconds).
 // servoSettings uses 800–2200 µs; tune PANEL_OPEN / PANEL_CLOSE for your panels.
 // =============================================================================
-#define DOME_PANEL_OPEN      2000
-#define DOME_PANEL_CLOSE     1100
-#define DOME_PANEL_TINYOPEN  1800
-#define DOME_PANEL_HALFWAY   1625
-#define DOME_PANEL_PARTOPEN  1450
-#define DOME_PANEL_MIN       1100
-#define DOME_PANEL_MAX       2000
+#define DOME_PANEL_OPEN      2100
+#define DOME_PANEL_CLOSE     1400
+#define DOME_PANEL_RANGE     (DOME_PANEL_OPEN - DOME_PANEL_CLOSE)
+#define DOME_PANEL_75_OPEN   (DOME_PANEL_CLOSE + (DOME_PANEL_RANGE * 3 / 4))
+#define DOME_PANEL_50_OPEN   (DOME_PANEL_CLOSE + (DOME_PANEL_RANGE / 2))
+#define DOME_PANEL_25_OPEN   (DOME_PANEL_CLOSE + (DOME_PANEL_RANGE / 4))
 
 // =============================================================================
 // Move-time constants (milliseconds). 
@@ -84,17 +83,11 @@ static bool dome_seqRunning = false;
 
 // Pump the full ReelTwo event loop while waiting.
 // This lets PCA9685 servo tweens animate smoothly during blocking sequences.
-static void domePumpEvents(unsigned long ms)
+static void domeWaitTime(unsigned long ms)
 {
     unsigned long end = millis() + ms;
     while (millis() < end)
         AnimatedEvent::process();
-}
-
-// Replaces the original waitTime() — keeps servos animated.
-static void domeWaitTime(unsigned long ms)
-{
-    domePumpEvents(ms);
 }
 
 // Send a command to the body controller via COMMAND_SERIAL (Serial2).
@@ -120,17 +113,14 @@ static void domeEndSequence()
     dome_seqRunning = false;
 }
 
-// Non-blocking: start a servo moving, return immediately.
-static inline void domeMove(uint8_t idx, uint16_t pos, uint32_t moveMs)
+static inline void domeMove(uint8_t idx, uint16_t pos, uint32_t moveMs, bool wait = false)
 {
     servoDispatch.moveToPulse(idx, moveMs, pos);
-}
-
-// Blocking: move a servo and wait for it to arrive (±50 ms margin).
-static inline void domeMoveWait(uint8_t idx, uint16_t pos, uint32_t moveMs)
-{
-    servoDispatch.moveToPulse(idx, moveMs, pos);
-    domePumpEvents(moveMs + 50);
+    if (wait) {
+        // Blocking: move a servo and wait until it actually arrives.
+        while (servoDispatch.isActive(idx))
+            AnimatedEvent::process();
+    }
 }
 
 // =============================================================================
@@ -143,7 +133,7 @@ static void domeEaseSineInOut(const uint8_t* idx, uint8_t count,
         servoDispatch.setServoEasingMethod(idx[i], Easing::SineEaseInOut);
     for (uint8_t i = 0; i < count; i++)
         servoDispatch.moveToPulse(idx[i], durationMs, (uint16_t)to);
-    domePumpEvents(durationMs + 50);
+    domeWaitTime(durationMs + 50);
     for (uint8_t i = 0; i < count; i++)
         servoDispatch.setServoEasingMethod(idx[i], Easing::LinearInterpolation);
 }
@@ -155,7 +145,7 @@ static void domeEaseOut(const uint8_t* idx, uint8_t count,
         servoDispatch.setServoEasingMethod(idx[i], Easing::SineEaseOut);
     for (uint8_t i = 0; i < count; i++)
         servoDispatch.moveToPulse(idx[i], durationMs, (uint16_t)to);
-    domePumpEvents(durationMs + 50);
+    domeWaitTime(durationMs + 50);
     for (uint8_t i = 0; i < count; i++)
         servoDispatch.setServoEasingMethod(idx[i], Easing::LinearInterpolation);
 }
@@ -222,41 +212,41 @@ static void domeOpenClosePies()
         domeResetHolos();
         domeSendToBody("HAPPY");
 
-        domeMoveWait(PP1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(PP2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(PP5, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(PP6, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+        domeMove(PP1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(PP2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(PP6, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
 
-        domePumpEvents(800);
+        domeWaitTime(800);
         servoDispatch.disable(PP1); servoDispatch.disable(PP2);
         servoDispatch.disable(PP5); servoDispatch.disable(PP6);
     }
     else
     {
         dome_PiesOpen = true;
-        domePumpEvents(100);
+        domeWaitTime(100);
         domeSendToBody("HAPPY");
 
         for (int i = 0; i < 2; i++)
         {
             // wave open
-            domeMoveWait(PP2, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED);
-            domeMoveWait(PP1, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED);
-            domeMoveWait(PP6, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED);
-            domeMoveWait(PP5, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED);
+            domeMove(PP2, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP1, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP6, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP5, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
             // wave close
-            domeMoveWait(PP5, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
-            domeMoveWait(PP6, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
-            domeMoveWait(PP1, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
-            domeMoveWait(PP2, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
+            domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED, true);
+            domeMove(PP6, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED, true);
+            domeMove(PP1, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED, true);
+            domeMove(PP2, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED, true);
             // reopen
-            domeMoveWait(PP2, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED);
-            domeMoveWait(PP1, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED);
-            domeMoveWait(PP6, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED);
-            domeMoveWait(PP5, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED);
+            domeMove(PP2, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP1, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP6, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
+            domeMove(PP5, DOME_PANEL_OPEN,  DOME_MOVE_FASTSPEED, true);
         }
 
-        domePumpEvents(1000);
+        domeWaitTime(1000);
         servoDispatch.disable(PP1); servoDispatch.disable(PP2);
         servoDispatch.disable(PP5); servoDispatch.disable(PP6);
     }
@@ -277,16 +267,16 @@ static void domeOpenCloseLow()
         domeResetHolos();
         domeSendToBody("HAPPY");
 
-        domeMoveWait(P4,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P3,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P11, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P13, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P7,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P10, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+        domeMove(P4,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P3,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P11, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P13, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P7,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P10, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
 
-        domePumpEvents(1000);
+        domeWaitTime(1000);
         servoDispatch.disable(P1);  servoDispatch.disable(P2);
         servoDispatch.disable(P3);  servoDispatch.disable(P4);
         servoDispatch.disable(P7);  servoDispatch.disable(P10);
@@ -300,39 +290,39 @@ static void domeOpenCloseLow()
         for (int i = 0; i < 2; i++)
         {
             // wave open — P11/P13/P10 non-blocking so they move with P1
-            domeMoveWait(P1,  DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-            domeMove(P11, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-            domeMove(P13, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-            domeMove(P10, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-            domeMoveWait(P2,  DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-            domeMoveWait(P3,  DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-            domeMoveWait(P4,  DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-            domeMoveWait(P7,  DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(P1,  DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
+            domeMove(P11, DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
+            domeMove(P13, DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
+            domeMove(P10, DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
+            domeMove(P2,  DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
+            domeMove(P3,  DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
+            domeMove(P4,  DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
+            domeMove(P7,  DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
 
             // wave close
-            domeMoveWait(P7,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMoveWait(P4,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMoveWait(P3,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMoveWait(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMoveWait(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domePumpEvents(50);
-            domeMoveWait(P11, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMoveWait(P13, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domePumpEvents(50);
-            domeMoveWait(P10, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+            domeMove(P7,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+            domeMove(P4,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+            domeMove(P3,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+            domeMove(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+            domeMove(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+            domeWaitTime(50);
+            domeMove(P11, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+            domeMove(P13, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+            domeWaitTime(50);
+            domeMove(P10, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
         }
 
         // final open
         domeMove(P10, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
         domeMove(P11, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
         domeMove(P13, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-        domeMoveWait(P1,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-        domeMoveWait(P2,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-        domeMoveWait(P3,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-        domeMoveWait(P4,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-        domeMoveWait(P7,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
+        domeMove(P1,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
+        domeMove(P2,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
+        domeMove(P3,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
+        domeMove(P4,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
+        domeMove(P7,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
 
-        domePumpEvents(1000);
+        domeWaitTime(1000);
         servoDispatch.disable(P1);  servoDispatch.disable(P2);
         servoDispatch.disable(P3);  servoDispatch.disable(P4);
         servoDispatch.disable(P7);  servoDispatch.disable(P10);
@@ -354,20 +344,20 @@ static void domeOpenCloseAll()
         dome_AllOpen = false;
         domeSendToBody("HAPPY");
 
-        domeMoveWait(PP2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(PP6, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(PP5, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(PP1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P10, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P7,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P4,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P3,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P11, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-        domeMoveWait(P13, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+        domeMove(PP2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(PP6, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(PP1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P10, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P7,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P4,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P3,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P11, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+        domeMove(P13, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
 
-        domePumpEvents(500);
+        domeWaitTime(500);
         servoDispatch.disable(PP1); servoDispatch.disable(PP2);
         servoDispatch.disable(PP5); servoDispatch.disable(PP6);
         servoDispatch.disable(P1);  servoDispatch.disable(P2);
@@ -381,10 +371,10 @@ static void domeOpenCloseAll()
         domeSendToBody("HAPPY");
 
         // open pies
-        domeMoveWait(PP2, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-        domeMoveWait(PP5, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-        domeMoveWait(PP1, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
-        domeMoveWait(PP6, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+        domeMove(PP2, DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
+        domeMove(PP5, DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
+        domeMove(PP1, DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
+        domeMove(PP6, DOME_PANEL_OPEN, DOME_MOVE_SPEED, true);
 
         // open lows (non-blocking except last)
         domeMove(P10, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
@@ -394,28 +384,28 @@ static void domeOpenCloseAll()
         domeMove(P2,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
         domeMove(P3,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
         domeMove(P4,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-        domeMoveWait(P7, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
+        domeMove(P7, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
 
         // twinkle P1/P2 and PP2/PP5
         for (int i = 0; i < 2; i++)
         {
-            domeMoveWait(P1, DOME_PANEL_TINYOPEN, DOME_MOVE_FASTSPEED);
+            domeMove(P1, DOME_PANEL_75_OPEN, DOME_MOVE_FASTSPEED, true);
             domeMove(P1, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-            domePumpEvents(80);
-            domeMoveWait(P2, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-            domeMove(P2, DOME_PANEL_TINYOPEN, DOME_MOVE_FASTSPEED);
-            domePumpEvents(80);
+            domeWaitTime(80);
+            domeMove(P2, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
+            domeMove(P2, DOME_PANEL_75_OPEN, DOME_MOVE_FASTSPEED);
+            domeWaitTime(80);
             domeMove(P2, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-            domePumpEvents(100);
+            domeWaitTime(100);
 
-            domeMoveWait(PP2, DOME_PANEL_TINYOPEN, DOME_MOVE_FASTSPEED);
-            domeMoveWait(PP2, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-            domePumpEvents(80);
-            domeMoveWait(PP5, DOME_PANEL_TINYOPEN, DOME_MOVE_FASTSPEED);
-            domeMoveWait(PP5, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
+            domeMove(PP2, DOME_PANEL_75_OPEN, DOME_MOVE_FASTSPEED, true);
+            domeMove(PP2, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
+            domeWaitTime(80);
+            domeMove(PP5, DOME_PANEL_75_OPEN, DOME_MOVE_FASTSPEED, true);
+            domeMove(PP5, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED, true);
         }
 
-        domePumpEvents(800);
+        domeWaitTime(800);
         servoDispatch.disable(PP1); servoDispatch.disable(PP2);
         servoDispatch.disable(PP5); servoDispatch.disable(PP6);
         servoDispatch.disable(P1);  servoDispatch.disable(P2);
@@ -434,39 +424,39 @@ static void domeFlutter()
 {
     domeBeginSequence(10);
 
-    domeMoveWait(P1,  DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
-    domeMoveWait(P2,  DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
-    domeMoveWait(P3,  DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
-    domePumpEvents(20);
-    domeMoveWait(P4,  DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
-    domePumpEvents(20);
-    domeMoveWait(P7,  DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
-    domeMoveWait(P10, DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
-    domeMoveWait(P11, DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
-    domeMoveWait(P13, DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
+    domeMove(P1,  DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P2,  DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P3,  DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeWaitTime(20);
+    domeMove(P4,  DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeWaitTime(20);
+    domeMove(P7,  DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P10, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P11, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(P13, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
 
-    domeMoveWait(PP2, DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
-    domeMoveWait(PP1, DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
-    domeMoveWait(PP6, DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
-    domePumpEvents(20);
-    domeMoveWait(PP5, DOME_PANEL_TINYOPEN, DOME_MOVE_SPEED);
+    domeMove(PP2, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(PP1, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeMove(PP6, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
+    domeWaitTime(20);
+    domeMove(PP5, DOME_PANEL_50_OPEN, DOME_MOVE_SPEED, true);
 
-    domeMoveWait(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMoveWait(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMoveWait(P3,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMoveWait(P4,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMoveWait(P7,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMoveWait(P10, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMoveWait(P11, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMoveWait(P13, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+    domeMove(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+    domeMove(P3,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+    domeMove(P4,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+    domeMove(P7,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+    domeMove(P10, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+    domeMove(P11, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+    domeMove(P13, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
 
-    domeMoveWait(PP2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMoveWait(PP1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMoveWait(PP6, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domePumpEvents(20);
-    domeMoveWait(PP5, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(PP2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+    domeMove(PP1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+    domeMove(PP6, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
+    domeWaitTime(20);
+    domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
 
-    domePumpEvents(500);
+    domeWaitTime(500);
 
     servoDispatch.disable(PP1); servoDispatch.disable(PP2);
     servoDispatch.disable(PP5); servoDispatch.disable(PP6);
@@ -492,22 +482,22 @@ static void domeBloom()
     static const uint8_t pies[] = { PP1, PP2, PP5, PP6 };
 
     domeEaseOut(pies, 4, DOME_PANEL_CLOSE, DOME_PANEL_OPEN, 1200);
-    domePumpEvents(2000);
+    domeWaitTime(2000);
 
     for (uint8_t i = 0; i < 3; i++)
     {
-        domeEaseSineInOut(pies, 4, DOME_PANEL_OPEN, 1900, 180);
-        domeEaseSineInOut(pies, 4, 1900, DOME_PANEL_OPEN, 180);
+        domeEaseSineInOut(pies, 4, DOME_PANEL_OPEN, 1900, 130);
+        domeEaseSineInOut(pies, 4, 1900, DOME_PANEL_OPEN, 130);
     }
 
-    domePumpEvents(1000);
+    domeWaitTime(1000);
 
     domeMove(PP1, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
     domeMove(PP2, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
     domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
-    domeMoveWait(PP6, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
+    domeMove(PP6, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
 
-    domePumpEvents(500);
+    domeWaitTime(500);
     servoDispatch.disable(PP1); servoDispatch.disable(PP2);
     servoDispatch.disable(PP5); servoDispatch.disable(PP6);
 
@@ -542,12 +532,12 @@ static void domeScream()
     domeMove(P10, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
     domeMove(P11, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
     domeMove(P13, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-    domeMove(P1,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-    domeMove(P2,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-    domeMove(P3,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-    domeMove(P4,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-    domeMove(P7,  DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-    domePumpEvents(DOME_MOVE_FASTSPEED + 100);
+    domeMove(P1, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
+    domeMove(P2, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
+    domeMove(P3, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
+    domeMove(P4, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
+    domeMove(P7, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
+    domeWaitTime(DOME_MOVE_FASTSPEED + 100);
 
     // random flutter
     static const uint8_t allPanels[] = { PP1, PP2, PP5, PP6, P1, P2, P3, P4, P7, P10, P11, P13 };
@@ -555,15 +545,15 @@ static void domeScream()
     for (int i = 0; i < 10; i++)
     {
         uint8_t idx = allPanels[random(12)];
-        domeMoveWait(idx, DOME_PANEL_HALFWAY, DOME_MOVE_FASTSPEED);
+        domeMove(idx, DOME_PANEL_50_OPEN, DOME_MOVE_FASTSPEED, true);
         domeMove(idx, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-        domePumpEvents(80);
-        domeMoveWait(idx, DOME_PANEL_HALFWAY, DOME_MOVE_FASTSPEED);
+        domeWaitTime(80);
+        domeMove(idx, DOME_PANEL_50_OPEN, DOME_MOVE_FASTSPEED, true);
         domeMove(idx, DOME_PANEL_OPEN, DOME_MOVE_FASTSPEED);
-        domePumpEvents(100);
+        domeWaitTime(100);
     }
 
-    domePumpEvents(800);
+    domeWaitTime(800);
     domeWaitTime(2000);
 
     // close
@@ -575,14 +565,14 @@ static void domeScream()
     domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
     domeMove(PP1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
     domeMove(P10, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMove(P7,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMove(P4,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMove(P3,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMove(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMove(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(P7, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(P4, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(P3, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(P2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(P1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
     domeMove(P11, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
     domeMove(P13, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domePumpEvents(DOME_MOVE_SPEED + 500);
+    domeWaitTime(DOME_MOVE_SPEED + 500);
 
     servoDispatch.disable(PP1); servoDispatch.disable(PP2);
     servoDispatch.disable(PP5); servoDispatch.disable(PP6);
@@ -620,7 +610,7 @@ static void domeOverload()
 
     for (uint8_t i = 0; i < count; i++)
     {
-        int pos = random(DOME_PANEL_HALFWAY, DOME_PANEL_OPEN + 1);
+        int pos = random(DOME_PANEL_25_OPEN, DOME_PANEL_50_OPEN + 1);
         domeMove(panels[i], (uint16_t)pos, DOME_MOVE_OVERLOAD);
         domeWaitTime(random(400, 900));
     }
@@ -689,17 +679,17 @@ static void domeHelloThere()
 
     domeSendToBody("HELLO");
 
-    domeMoveWait(P1, DOME_PANEL_OPEN,     DOME_MOVE_SPEED);
-    domePumpEvents(10);
-    domeMoveWait(P1, DOME_PANEL_HALFWAY,  DOME_MOVE_SPEED);
-    domePumpEvents(10);
-    domeMoveWait(P1, DOME_PANEL_OPEN,     DOME_MOVE_SPEED);
-    domePumpEvents(10);
-    domeMoveWait(P1, DOME_PANEL_HALFWAY,  DOME_MOVE_SPEED);
-    domePumpEvents(10);
-    domeMoveWait(P1, DOME_PANEL_OPEN,     DOME_MOVE_SPEED);
-    domePumpEvents(10);
-    domeMoveWait(P1, DOME_PANEL_CLOSE,    DOME_MOVE_SPEED);
+    domeMove(P1, DOME_PANEL_OPEN,     DOME_MOVE_SPEED, true);
+    domeWaitTime(10);
+    domeMove(P1, DOME_PANEL_25_OPEN,  DOME_MOVE_SPEED, true);
+    domeWaitTime(10);
+    domeMove(P1, DOME_PANEL_OPEN,     DOME_MOVE_SPEED, true);
+    domeWaitTime(10);
+    domeMove(P1, DOME_PANEL_25_OPEN,  DOME_MOVE_SPEED, true);
+    domeWaitTime(10);
+    domeMove(P1, DOME_PANEL_OPEN,     DOME_MOVE_SPEED, true);
+    domeWaitTime(10);
+    domeMove(P1, DOME_PANEL_CLOSE,    DOME_MOVE_SPEED, true);
     servoDispatch.disable(P1);
 
     domeEndSequence();
@@ -722,7 +712,7 @@ static void domeLeiaMode()
     COMMAND_SERIAL.println("4T6|36");
     COMMAND_SERIAL.println("5T6|36");
     domeSendToBody("LEIA");
-    domePumpEvents(500);
+    domeWaitTime(500);
 
     domeEndSequence();
 }
@@ -738,15 +728,15 @@ static void domeResetAll()
     domeMove(PP2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
     domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
     domeMove(PP6, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMove(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMove(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMove(P3,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMove(P4,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domeMove(P7,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(P1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(P2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(P3, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(P4, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+    domeMove(P7, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
     domeMove(P10, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
     domeMove(P11, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
     domeMove(P13, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-    domePumpEvents(DOME_MOVE_SPEED + 1000);
+    domeWaitTime(DOME_MOVE_SPEED + 1000);
 
     servoDispatch.disable(PP1); servoDispatch.disable(PP2);
     servoDispatch.disable(PP5); servoDispatch.disable(PP6);
@@ -799,16 +789,16 @@ static void domeCantina()
     {
         if (evenOpen)
         {
-            domeMove(PP1, DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
-            domeMove(PP5, DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
+            domeMove(PP1, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(PP5, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
             domeMove(PP2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
             domeMove(PP6, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMove(P1,  DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
-            domeMove(P3,  DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
-            domeMove(P7,  DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
-            domeMove(P11, DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
-            domeMove(P2,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMove(P4,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+            domeMove(P1, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(P3, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(P7, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(P11, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(P2, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+            domeMove(P4, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
             domeMove(P10, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
             domeMove(P13, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
         }
@@ -816,16 +806,16 @@ static void domeCantina()
         {
             domeMove(PP1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
             domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMove(PP2, DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
-            domeMove(PP6, DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
-            domeMove(P1,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMove(P3,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMove(P7,  DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+            domeMove(PP2, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(PP6, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(P1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+            domeMove(P3, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
+            domeMove(P7, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
             domeMove(P11, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
-            domeMove(P2,  DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
-            domeMove(P4,  DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
-            domeMove(P10, DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
-            domeMove(P13, DOME_PANEL_OPEN,  DOME_MOVE_SPEED);
+            domeMove(P2, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(P4, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(P10, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
+            domeMove(P13, DOME_PANEL_OPEN, DOME_MOVE_SPEED);
         }
         evenOpen = !evenOpen;
         domeWaitTime(BEAT_MS);
@@ -835,16 +825,16 @@ static void domeCantina()
     domeMove(PP2, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
     domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
     domeMove(PP6, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
-    domeMove(P1,  DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
-    domeMove(P2,  DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
-    domeMove(P3,  DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
-    domeMove(P4,  DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
-    domeMove(P7,  DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
+    domeMove(P1, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
+    domeMove(P2, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
+    domeMove(P3, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
+    domeMove(P4, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
+    domeMove(P7, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
     domeMove(P10, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
     domeMove(P11, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
-    domeMoveWait(P13, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED);
+    domeMove(P13, DOME_PANEL_CLOSE, DOME_MOVE_FASTSPEED, true);
 
-    domePumpEvents(500);
+    domeWaitTime(500);
 
     servoDispatch.disable(PP1); servoDispatch.disable(PP2);
     servoDispatch.disable(PP5); servoDispatch.disable(PP6);
