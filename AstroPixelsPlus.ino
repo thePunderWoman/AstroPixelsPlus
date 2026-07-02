@@ -620,7 +620,10 @@ void setup()
         COMMAND_SERIAL.begin(preferences.getInt(PREFERENCE_MARCSERIAL2, MARC_SERIAL2_BAUD_RATE), SERIAL_8N1, SERIAL2_RX_PIN, SERIAL2_TX_PIN);
         // if (preferences.getBool(PREFERENCE_MARCSERIAL_PASS, MARC_SERIAL_PASS))
 
-        marcduinoSerial.setStream(&COMMAND_SERIAL, &Serial);
+        // Route through domeEstopSniffStream (DomeSequences.h) so DM:ESTOP can freeze
+        // panel servos immediately, even mid-sequence, instead of waiting for the
+        // AnimationPlayer to get around to it.
+        marcduinoSerial.setStream(&domeEstopSniffStream, &Serial);
     }
     if (!mountReadOnlyFileSystem())
     {

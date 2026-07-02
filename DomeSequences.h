@@ -9,6 +9,12 @@
 //
 // Servo motion uses ServoDispatchPCA9685 (servoDispatch global from .ino).
 // Panel indices below map 1-to-1 to the servoSettings[] array in the .ino.
+//
+// DM:ESTOP freezes every panel servo in place, mid-sequence if necessary, and
+// latches out all other panel motion until DM:RESET is received. Requires
+// COMMAND_SERIAL to be routed through DomeCommandSniffStream in setup() (see
+// AstroPixelsPlus.ino) so the freeze can happen immediately instead of
+// waiting for the currently-running sequence to finish on its own.
 //-----------------------------------------------------------------------------------------------
 
 #pragma once
@@ -78,17 +84,24 @@ static bool dome_LowOpen  = false;
 // Re-entrancy guard: prevents a second sequence from starting while one runs.
 static bool dome_seqRunning = false;
 
+// ESTOP latch: freezes every panel servo in place and blocks all further panel
+// motion until DM:RESET is received. Cleared only by domeResetAll().
+static volatile bool dome_eStopActive = false;
+
 // =============================================================================
 // Core helpers
 // =============================================================================
 
 // Pump the full ReelTwo event loop while waiting.
 // This lets PCA9685 servo tweens animate smoothly during blocking sequences.
+// Always pumps at least once (even if ESTOP is already latched) so serial
+// commands (e.g. DM:RESET) keep being read instead of starving mid-sequence.
 static void domeWaitTime(unsigned long ms)
 {
     unsigned long end = millis() + ms;
-    while (millis() < end)
+    do {
         AnimatedEvent::process();
+    } while (millis() < end && !dome_eStopActive);
 }
 
 // Send a command to the body controller via COMMAND_SERIAL (Serial2).
@@ -114,12 +127,98 @@ static void domeEndSequence()
     dome_seqRunning = false;
 }
 
+// =============================================================================
+// ESTOP — emergency stop
+// =============================================================================
+// Freezes every dome panel servo exactly where it is and latches the board so
+// no further panel motion is accepted until DM:RESET clears it (domeResetAll()).
+//
+// DM:ESTOP is recognized two ways:
+//  1. The normal MARCDUINO_ACTION path below (DomeEStop) — handles it when the
+//     dome is idle, same as every other DM: command.
+//  2. domeEstopSniff(), fed every raw byte read from COMMAND_SERIAL via
+//     DomeCommandSniffStream. This is what makes ESTOP actually interrupt a
+//     sequence that's mid-move: MARCDUINO_ACTION commands are dispatched
+//     through the shared AnimationPlayer, which won't run a newly-queued
+//     action until the *currently* running one returns — but a dome sequence
+//     runs synchronously from a single blocking call, so that queued ESTOP
+//     action would never get a turn until the sequence finished on its own.
+//     Sniffing the raw bytes lets us set dome_eStopActive and freeze servos
+//     immediately, from any call depth, without touching player state.
+// =============================================================================
+static const uint8_t domeAllPanelIndices[] = { PP1, PP2, PP5, PP6, P1, P2, P3, P4, P7, P10, P11, P13 };
+
+static void domeFreezeAllServos()
+{
+    for (uint8_t i = 0; i < SizeOfArray(domeAllPanelIndices); i++)
+        servoDispatch.disable(domeAllPanelIndices[i]); // holds current position under power, does not detach
+}
+
+static void domeTriggerEstop()
+{
+    if (dome_eStopActive)
+        return; // already latched
+    dome_eStopActive = true;
+    domeFreezeAllServos();
+    domeSendToBody("ESTOP");
+}
+
+// Scans bytes read from COMMAND_SERIAL for the literal "DM:ESTOP\r" line, byte by
+// byte, independent of the Marcduino command parser reading the same stream.
+static void domeEstopSniff(char ch)
+{
+    static const char kPattern[] = "DM:ESTOP\r";
+    static uint8_t matched = 0;
+    if (ch == kPattern[matched])
+    {
+        if (kPattern[++matched] == '\0')
+        {
+            matched = 0;
+            domeTriggerEstop();
+        }
+    }
+    else
+    {
+        matched = (ch == kPattern[0]) ? 1 : 0;
+    }
+}
+
+// Transparent Stream wrapper: passes every byte through to the real stream
+// unchanged, while feeding a copy of each read byte to domeEstopSniff().
+class DomeCommandSniffStream : public Stream
+{
+public:
+    explicit DomeCommandSniffStream(Stream& upstream) : fUpstream(upstream) {}
+
+    virtual int available() override { return fUpstream.available(); }
+    virtual int peek() override { return fUpstream.peek(); }
+    virtual size_t write(uint8_t b) override { return fUpstream.write(b); }
+
+    virtual int read() override
+    {
+        int ch = fUpstream.read();
+        if (ch != -1)
+            domeEstopSniff((char)ch);
+        return ch;
+    }
+
+private:
+    Stream& fUpstream;
+};
+
+// Wraps COMMAND_SERIAL (Serial2). AstroPixelsPlus.ino points marcduinoSerial at this
+// instead of COMMAND_SERIAL directly, so every byte still reaches the normal Marcduino
+// parser unchanged while also passing through domeEstopSniff().
+static DomeCommandSniffStream domeEstopSniffStream(COMMAND_SERIAL);
+
 static inline void domeMove(uint8_t idx, uint16_t pos, uint32_t moveMs, bool wait = false)
 {
+    if (dome_eStopActive)
+        return;
     servoDispatch.moveToPulse(idx, moveMs, pos);
     if (wait) {
         // Blocking: move a servo and wait until it actually arrives.
-        while (servoDispatch.isActive(idx))
+        while (servoDispatch.isActive(idx) && !dome_eStopActive)
             AnimatedEvent::process();
     }
 }
@@ -130,6 +229,8 @@ static inline void domeMove(uint8_t idx, uint16_t pos, uint32_t moveMs, bool wai
 static void domeEaseSineInOut(const uint8_t* idx, uint8_t count,
                               int /*from*/, int to, unsigned int durationMs)
 {
+    if (dome_eStopActive)
+        return;
     for (uint8_t i = 0; i < count; i++)
         servoDispatch.setServoEasingMethod(idx[i], Easing::SineEaseInOut);
     for (uint8_t i = 0; i < count; i++)
@@ -142,6 +243,8 @@ static void domeEaseSineInOut(const uint8_t* idx, uint8_t count,
 static void domeEaseOut(const uint8_t* idx, uint8_t count,
                         int /*from*/, int to, unsigned int durationMs)
 {
+    if (dome_eStopActive)
+        return;
     for (uint8_t i = 0; i < count; i++)
         servoDispatch.setServoEasingMethod(idx[i], Easing::SineEaseOut);
     for (uint8_t i = 0; i < count; i++)
@@ -687,12 +790,12 @@ static void domeDisco()
 // =============================================================================
 static void domeVader()
 {
-    domeBeginSequence(47);
+    domeBeginSequence(60);
 
-    CommandEvent::process(F("HPA0021|47")); // all holos red flashes
+    CommandEvent::process(F("HPA0021|60")); // all holos red flashes
 
-    FLD.selectSequence(LogicEngineRenderer::MARCH, FLD.kRed, 0, 47);
-    RLD.selectSequence(LogicEngineRenderer::MARCH, RLD.kRed, 0, 47);
+    FLD.selectSequence(LogicEngineRenderer::MARCH, FLD.kRed, 0, 60);
+    RLD.selectSequence(LogicEngineRenderer::MARCH, RLD.kRed, 0, 60);
 
     COMMAND_SERIAL.println("4T11");
     COMMAND_SERIAL.println("5T11");
@@ -777,6 +880,7 @@ static void domeLeiaMode()
 // =============================================================================
 static void domeResetAll()
 {
+    dome_eStopActive = false; // RESET is the only thing that clears a latched ESTOP
     domeBeginSequence(4);
 
     domeMove(PP1, DOME_PANEL_CLOSE, DOME_MOVE_SPEED);
@@ -840,7 +944,7 @@ static void domeCantina()
     bool evenOpen = true;
     unsigned long endTime = millis() + DURATION;
 
-    while (millis() < endTime)
+    while (millis() < endTime && !dome_eStopActive)
     {
         if (evenOpen)
         {
@@ -909,51 +1013,33 @@ static void domeCantina()
     domeEndSequence();
 }
 
-static void domeRandom()
-{
-    static const char* const sequences[] = {
-        ":SE02",  // Wave
-        ":SE03",  // SmirkWave
-        ":SE04",  // OpenCloseWave
-        ":SE05",  // BeepCantina
-        ":SE06",  // Short
-        ":SE52",  // WavePanel
-        ":SE53",  // SmirkWavePanel
-        ":SE54",  // OpenWave
-        ":SE55",  // MarchingAnts
-        ":SE56",  // Faint
-        ":SE57",  // Rythmic
-        "$815",   // HarlemShake
-        "$821",   // GirlOnFire
-        "$720",   // YodaClearMind
-    };
-    static const uint8_t count = sizeof(sequences) / sizeof(sequences[0]);
-    Marcduino::processCommand(player, sequences[random(count)]);
-}
-
 // =============================================================================
 // Marcduino serial command handlers — prefix "DM:" on COMMAND_SERIAL
 //
 // Send from any Marcduino-compatible device as:   DM:PIES\r
 // =============================================================================
 
+// DM:RESET and DM:ESTOP are always accepted — RESET must work even while a
+// sequence is winding down after an ESTOP, and ESTOP must work regardless of
+// what else is going on. Every other dome command is blocked while ESTOP is
+// latched (see domeTriggerEstop()); send DM:RESET to clear it.
 MARCDUINO_ACTION(DomeReset,     DM:RESET,       ({ if (!dome_seqRunning) domeResetAll();      }))
-MARCDUINO_ACTION(DomePies,      DM:PIES,        ({ if (!dome_seqRunning) domeOpenClosePies(); }))
-MARCDUINO_ACTION(DomeLow,       DM:LOW,         ({ if (!dome_seqRunning) domeOpenCloseLow();  }))
-MARCDUINO_ACTION(DomeOpenAll,   DM:OPENALL,     ({ if (!dome_seqRunning) domeOpenCloseAll();  }))
-MARCDUINO_ACTION(DomeLeia,      DM:LEIA,        ({ if (!dome_seqRunning) domeLeiaMode();      }))
-MARCDUINO_ACTION(DomeHeart,     DM:HEART,       ({ if (!dome_seqRunning) domeHeart();         }))
-MARCDUINO_ACTION(DomeHello,     DM:HELLO,       ({ if (!dome_seqRunning) domeHelloThere();    }))
-MARCDUINO_ACTION(DomeScream,    DM:SCREAM,      ({ if (!dome_seqRunning) domeScream();        }))
-MARCDUINO_ACTION(DomeFlutter,   DM:FLUTTER,     ({ if (!dome_seqRunning) domeFlutter();       }))
-MARCDUINO_ACTION(DomeOverload,  DM:OVERLOAD,    ({ if (!dome_seqRunning) domeOverload();      }))
-MARCDUINO_ACTION(DomeBloom,     DM:BLOOM,       ({ if (!dome_seqRunning) domeBloom();         }))
-MARCDUINO_ACTION(DomeCantina,   DM:CANTINA,     ({ if (!dome_seqRunning) domeCantina();       }))
-MARCDUINO_ACTION(DomeAlarm,     DM:ALARM,       ({ if (!dome_seqRunning) domeAlarm();         }))
-MARCDUINO_ACTION(DomeSeqDisco,  DM:DISCO,       ({ if (!dome_seqRunning) domeDisco();         }))
-MARCDUINO_ACTION(DomeRockMarch, DM:ROCKMARCH,   ({ if (!dome_seqRunning) domeRockMarch();     }))
-MARCDUINO_ACTION(DomeRandom,    DM:RANDOM,      ({ if (!dome_seqRunning) domeRandom();        }))
-MARCDUINO_ACTION(DomeVader,     DM:VADER,       ({ if (!dome_seqRunning) domeVader();         }))
+MARCDUINO_ACTION(DomeEStop,     DM:ESTOP,       ({ domeTriggerEstop();                        }))
+MARCDUINO_ACTION(DomePies,      DM:PIES,        ({ if (!dome_seqRunning && !dome_eStopActive) domeOpenClosePies(); }))
+MARCDUINO_ACTION(DomeLow,       DM:LOW,         ({ if (!dome_seqRunning && !dome_eStopActive) domeOpenCloseLow();  }))
+MARCDUINO_ACTION(DomeOpenAll,   DM:OPENALL,     ({ if (!dome_seqRunning && !dome_eStopActive) domeOpenCloseAll();  }))
+MARCDUINO_ACTION(DomeLeia,      DM:LEIA,        ({ if (!dome_seqRunning && !dome_eStopActive) domeLeiaMode();      }))
+MARCDUINO_ACTION(DomeHeart,     DM:HEART,       ({ if (!dome_seqRunning && !dome_eStopActive) domeHeart();         }))
+MARCDUINO_ACTION(DomeHello,     DM:HELLO,       ({ if (!dome_seqRunning && !dome_eStopActive) domeHelloThere();    }))
+MARCDUINO_ACTION(DomeScream,    DM:SCREAM,      ({ if (!dome_seqRunning && !dome_eStopActive) domeScream();        }))
+MARCDUINO_ACTION(DomeFlutter,   DM:FLUTTER,     ({ if (!dome_seqRunning && !dome_eStopActive) domeFlutter();       }))
+MARCDUINO_ACTION(DomeOverload,  DM:OVERLOAD,    ({ if (!dome_seqRunning && !dome_eStopActive) domeOverload();      }))
+MARCDUINO_ACTION(DomeBloom,     DM:BLOOM,       ({ if (!dome_seqRunning && !dome_eStopActive) domeBloom();         }))
+MARCDUINO_ACTION(DomeCantina,   DM:CANTINA,     ({ if (!dome_seqRunning && !dome_eStopActive) domeCantina();       }))
+MARCDUINO_ACTION(DomeAlarm,     DM:ALARM,       ({ if (!dome_seqRunning && !dome_eStopActive) domeAlarm();         }))
+MARCDUINO_ACTION(DomeSeqDisco,  DM:DISCO,       ({ if (!dome_seqRunning && !dome_eStopActive) domeDisco();         }))
+MARCDUINO_ACTION(DomeRockMarch, DM:ROCKMARCH,   ({ if (!dome_seqRunning && !dome_eStopActive) domeRockMarch();     }))
+MARCDUINO_ACTION(DomeVader,     DM:VADER,       ({ if (!dome_seqRunning && !dome_eStopActive) domeVader();         }))
 
 // =============================================================================
 // MarcduinoSequence.h aliases — expose predefined SE sequences via DM: names
@@ -964,23 +1050,28 @@ MARCDUINO_ACTION(DomeVader,     DM:VADER,       ({ if (!dome_seqRunning) domeVad
 // Conflicts with dome-local sequences (SCREAM, CANTINA, LEIA) get an "SE"
 // prefix to make clear they are the standard Marcduino versions.
 // =============================================================================
-MARCDUINO_ACTION(DomeSeqStop,           DM:STOP,           ({ Marcduino::processCommand(player, ":SE00"); }))
-MARCDUINO_ACTION(DomeSeqScream,         DM:SESCREAM,       ({ Marcduino::processCommand(player, ":SE01"); }))
-MARCDUINO_ACTION(DomeSeqWave,           DM:WAVE,           ({ Marcduino::processCommand(player, ":SE02"); }))
-MARCDUINO_ACTION(DomeSeqSmirkWave,      DM:SMIRKWAVE,      ({ Marcduino::processCommand(player, ":SE03"); }))
-MARCDUINO_ACTION(DomeSeqOCWave,         DM:OCWAVE,         ({ Marcduino::processCommand(player, ":SE04"); }))
+// MARCDUINO_ACTION sequences — call SEQUENCE_PLAY_ONCE / sMarcSound directly (no re-entrant dispatch)
+// MARCDUINO_ANIMATION sequences — route through player which owns them
+// These call SEQUENCE_PLAY_ONCE* directly against servoSequencer (not the
+// domeXxx()/domeMove() helpers above), so they're independently guarded
+// against starting new panel motion while ESTOP is latched.
+MARCDUINO_ACTION(DomeSeqStop,           DM:STOP,           ({ /* no-op — SE00 stops sequences */ }))
+MARCDUINO_ACTION(DomeSeqScream,         DM:SESCREAM,       ({ CommandEvent::process("LE3010003"); CommandEvent::process("LE1010003"); sMarcSound.handleCommand("$S"); if (!dome_eStopActive) SEQUENCE_PLAY_ONCE(servoSequencer, SeqPanelAllOpenClose, ALL_DOME_PANELS_MASK); }))
+MARCDUINO_ACTION(DomeSeqWave,           DM:WAVE,           ({ sMarcSound.handleCommand("$213"); if (!dome_eStopActive) SEQUENCE_PLAY_ONCE(servoSequencer, SeqPanelWave, ALL_DOME_PANELS_MASK); }))
+MARCDUINO_ACTION(DomeSeqSmirkWave,      DM:SMIRKWAVE,      ({ sMarcSound.handleCommand("$34");  if (!dome_eStopActive) SEQUENCE_PLAY_ONCE(servoSequencer, SeqPanelWaveFast, ALL_DOME_PANELS_MASK); }))
+MARCDUINO_ACTION(DomeSeqOCWave,         DM:OCWAVE,         ({ sMarcSound.handleCommand("$36");  if (!dome_eStopActive) SEQUENCE_PLAY_ONCE(servoSequencer, SeqPanelOpenCloseWave, ALL_DOME_PANELS_MASK); }))
 MARCDUINO_ACTION(DomeSeqBeepCantina,    DM:BEEPCANTINA,    ({ Marcduino::processCommand(player, ":SE05"); }))
 MARCDUINO_ACTION(DomeSeqShort,          DM:SHORT,          ({ Marcduino::processCommand(player, ":SE06"); }))
 MARCDUINO_ACTION(DomeSeqSecantina,      DM:SECANTINA,      ({ Marcduino::processCommand(player, ":SE07"); }))
 MARCDUINO_ACTION(DomeSeqSeleia,         DM:SELEIA,         ({ Marcduino::processCommand(player, ":SE08"); }))
-MARCDUINO_ACTION(DomeSeqScreamNoPanel,  DM:SCREAMNOPANEL,  ({ Marcduino::processCommand(player, ":SE50"); }))
-MARCDUINO_ACTION(DomeSeqScreamPanel,    DM:SCREAMPANEL,    ({ Marcduino::processCommand(player, ":SE51"); }))
-MARCDUINO_ACTION(DomeSeqWavePanel,      DM:WAVEPANEL,      ({ Marcduino::processCommand(player, ":SE52"); }))
-MARCDUINO_ACTION(DomeSeqSmirkWavePanel, DM:SMIRKWAVEPANEL, ({ Marcduino::processCommand(player, ":SE53"); }))
-MARCDUINO_ACTION(DomeSeqOpenWave,       DM:OPENWAVE,       ({ Marcduino::processCommand(player, ":SE54"); }))
-MARCDUINO_ACTION(DomeSeqMarchingAnts,   DM:MARCHINGANTS,   ({ Marcduino::processCommand(player, ":SE55"); }))
-MARCDUINO_ACTION(DomeSeqFaint,          DM:FAINT,          ({ Marcduino::processCommand(player, ":SE56"); }))
-MARCDUINO_ACTION(DomeSeqRythmic,        DM:RYTHMIC,        ({ Marcduino::processCommand(player, ":SE57"); }))
+MARCDUINO_ACTION(DomeSeqScreamNoPanel,  DM:SCREAMNOPANEL,  ({ CommandEvent::process("LE3010003"); CommandEvent::process("LE1010003"); sMarcSound.handleCommand("$S"); }))
+MARCDUINO_ACTION(DomeSeqScreamPanel,    DM:SCREAMPANEL,    ({ if (!dome_eStopActive) SEQUENCE_PLAY_ONCE(servoSequencer, SeqPanelAllOpenClose, ALL_DOME_PANELS_MASK); }))
+MARCDUINO_ACTION(DomeSeqWavePanel,      DM:WAVEPANEL,      ({ if (!dome_eStopActive) SEQUENCE_PLAY_ONCE(servoSequencer, SeqPanelWave, ALL_DOME_PANELS_MASK); }))
+MARCDUINO_ACTION(DomeSeqSmirkWavePanel, DM:SMIRKWAVEPANEL, ({ if (!dome_eStopActive) SEQUENCE_PLAY_ONCE(servoSequencer, SeqPanelWaveFast, ALL_DOME_PANELS_MASK); }))
+MARCDUINO_ACTION(DomeSeqOpenWave,       DM:OPENWAVE,       ({ sMarcSound.handleCommand("$36"); if (!dome_eStopActive) SEQUENCE_PLAY_ONCE(servoSequencer, SeqPanelOpenCloseWave, ALL_DOME_PANELS_MASK); }))
+MARCDUINO_ACTION(DomeSeqMarchingAnts,   DM:MARCHINGANTS,   ({ if (!dome_eStopActive) SEQUENCE_PLAY_ONCE(servoSequencer, SeqPanelMarchingAnts, ALL_DOME_PANELS_MASK); }))
+MARCDUINO_ACTION(DomeSeqFaint,          DM:FAINT,          ({ if (!dome_eStopActive) SEQUENCE_PLAY_ONCE_VARSPEED(servoSequencer, SeqPanelAllOpenCloseLong, ALL_DOME_PANELS_MASK, 700, 900); }))
+MARCDUINO_ACTION(DomeSeqRythmic,        DM:RYTHMIC,        ({ if (!dome_eStopActive) SEQUENCE_PLAY_ONCE_SPEED(servoSequencer, SeqPanelAllOpenCloseLong, ALL_DOME_PANELS_MASK, 900); }))
 MARCDUINO_ACTION(DomeSeqHarlemShake,    DM:HARLEMSHAKE,    ({ Marcduino::processCommand(player, "$815"); }))
 MARCDUINO_ACTION(DomeSeqGirlOnFire,     DM:GIRLONFIRE,     ({ Marcduino::processCommand(player, "$821"); }))
 MARCDUINO_ACTION(DomeSeqYoda,           DM:YODA,           ({ Marcduino::processCommand(player, "$720"); }))
