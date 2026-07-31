@@ -25,6 +25,19 @@ static void webConsoleLog(const char* msg)
     webConsoleLog(String(msg));
 }
 
+// Extracts an integer query param ("key=123&...") from a WAPI query string.
+static int webQueryParamInt(const String& query, const char* key, int defaultVal)
+{
+    String k = String(key) + "=";
+    int idx = query.indexOf(k);
+    if (idx < 0)
+        return defaultVal;
+    int start = idx + k.length();
+    int end = query.indexOf('&', start);
+    String val = (end >= 0) ? query.substring(start, end) : query.substring(start);
+    return val.toInt();
+}
+
 // Simple URL-decode (%XX and + → space)
 static String webUrlDecode(const String& s)
 {

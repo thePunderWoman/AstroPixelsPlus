@@ -29,6 +29,7 @@ WMenuData setupMenu[] = {
     { "Remote", "/remote" },
     { "Firmware", "/firmware" },
     { "Console", "/console" },
+    { "Servo Tester", "/servotester" },
     { "Back", "/" }
 };
 
@@ -496,6 +497,263 @@ WAPI consoleSendAPI("/api/send", [](Print& out, String query) {
     out.print(json);
 });
 
+////////////////////////////////
+// Servo Tester — live raw-pulse control for calibrating dome panel min/max
+// ranges. Moves servos directly by pulse width via servoDispatch.moveToPulse(),
+// temporarily widening that servo's start/end bounds to the full hardware
+// range (500-2500us) so the slider isn't clamped to whatever is currently
+// baked into servoSettings[] in the .ino — the whole point is finding out
+// what those numbers *should* be. Indices match the servoSettings[] panel
+// entries documented at the top of DomeSequences.h (0-12; holo servos 13-18
+// are out of scope here).
+////////////////////////////////
+
+const uint8_t kServoTesterCount = 13;
+
+const char* const kServoTesterNames[kServoTesterCount] = {
+    "Door 4 (P4)",
+    "Door 3 (P3)",
+    "Door 2 (P2)",
+    "Door 1 (P1)",
+    "Door 5 (P7)",
+    "Door 9 (P10)",
+    "Mini Door 2 (P11)",
+    "Mini PSI Door (P13)",
+    "Pie Panel 1 (PP1)",
+    "Pie Panel 2 (PP2)",
+    "Pie Panel 3 (PP5)",
+    "Pie Panel 4 (PP6)",
+    "Dome Top Panel"
+};
+
+WElement servoTesterContents[] = {
+    WHTML(R"HTML(
+<div style="max-width:520px;margin:0 auto;padding:10px;font-family:sans-serif;text-align:left">
+<h2 style="text-align:center">Servo Tester</h2>
+<p style="font-size:12px;color:#666">
+Moves a single panel servo by raw pulse width so you can find its safe open/close
+limits in a tight space. Movement ignores the firmware's current min/max — go
+slowly and watch for binding. <b>Set Min</b> / <b>Set Max</b> just record the
+slider value below so you can copy the numbers into <code>servoSettings[]</code>.
+</p>
+
+<label for="svsel"><b>Panel:</b></label>
+<select id="svsel" style="width:100%;padding:6px;margin:6px 0"></select>
+
+<p id="svinfo" style="font-size:12px;color:#666"></p>
+
+<p style="text-align:center;font-size:28px;margin:4px 0" id="svpulse">--</p>
+<input type="range" id="svslider" min="500" max="2500" value="1500" style="width:100%">
+
+<div style="display:flex;justify-content:center;gap:6px;margin:8px 0">
+  <button onclick="nudge(-10)">-10</button>
+  <button onclick="nudge(-1)">-1</button>
+  <button onclick="nudge(1)">+1</button>
+  <button onclick="nudge(10)">+10</button>
+</div>
+
+<div style="display:flex;justify-content:center;gap:6px;margin:8px 0">
+  <button onclick="goFirmware('start')">Go to Firmware Min</button>
+  <button onclick="goFirmware('end')">Go to Firmware Max</button>
+</div>
+
+<div style="display:flex;justify-content:center;gap:6px;margin:8px 0">
+  <button onclick="setMin()" style="background:#2d7;color:#fff;border:none;padding:8px 16px;border-radius:4px">Set Min Here</button>
+  <button onclick="setMax()" style="background:#d72;color:#fff;border:none;padding:8px 16px;border-radius:4px">Set Max Here</button>
+  <button onclick="relax()" style="background:#555;color:#fff;border:none;padding:8px 16px;border-radius:4px">Relax</button>
+</div>
+
+<p id="svmeasured" style="text-align:center;font-weight:bold"></p>
+<input id="svresult" type="text" readonly style="width:100%;padding:6px;font-family:monospace;box-sizing:border-box" onclick="this.select()">
+
+<p id="svstatus" style="text-align:center;color:#c00;font-weight:bold"></p>
+
+<p style="margin-top:8px;font-size:12px;color:#888;text-align:center">
+  <a href="/setup" style="color:#888">Setup</a> &bull;
+  <a href="/" style="color:#888">Home</a>
+</p>
+</div>
+)HTML"),
+    WJavaScript(R"JS(
+var svServos = [];
+var svIdx = -1;
+var svMeasuredMin = null, svMeasuredMax = null;
+var svLastMoveSent = 0;
+
+var svSel = document.getElementById('svsel');
+var svSlider = document.getElementById('svslider');
+var svPulse = document.getElementById('svpulse');
+var svInfo = document.getElementById('svinfo');
+var svMeasured = document.getElementById('svmeasured');
+var svResult = document.getElementById('svresult');
+var svStatus = document.getElementById('svstatus');
+
+function svCurrent() { return svServos[svIdx]; }
+
+function refreshInfo() {
+    var s = svCurrent();
+    if (!s) return;
+    svInfo.textContent = 'Pin ' + s.pin + ' — firmware range currently ' + s.start + ' - ' + s.end;
+}
+
+function refreshMeasured() {
+    var s = svCurrent();
+    if (!s) return;
+    var minTxt = (svMeasuredMin === null) ? '?' : svMeasuredMin;
+    var maxTxt = (svMeasuredMax === null) ? '?' : svMeasuredMax;
+    svMeasured.textContent = 'Measured: min=' + minTxt + '  max=' + maxTxt;
+    svResult.value = 'servoSettings[' + svIdx + '] (' + s.name + ', pin ' + s.pin + '): startPulse=' +
+        minTxt + ', endPulse=' + maxTxt;
+}
+
+function loadServos() {
+    fetch('/api/servolist').then(function(r) { return r.json(); }).then(function(list) {
+        svServos = list;
+        svSel.innerHTML = '';
+        list.forEach(function(s, i) {
+            var opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = s.name;
+            svSel.appendChild(opt);
+        });
+        selectServo(0);
+    });
+}
+
+function selectServo(i) {
+    svIdx = i;
+    svSel.value = i;
+    svMeasuredMin = null;
+    svMeasuredMax = null;
+    var s = svCurrent();
+    svSlider.value = s.start;
+    svPulse.textContent = s.start;
+    refreshInfo();
+    refreshMeasured();
+}
+
+svSel.onchange = function() { selectServo(parseInt(this.value)); };
+
+function sendMove(pulse) {
+    fetch('/api/servomove?idx=' + svIdx + '&pulse=' + pulse + '&')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            svStatus.textContent = d.ok ? '' : ('Blocked: ' + d.reason);
+        })
+        .catch(function() {});
+}
+
+function moveTo(pulse) {
+    pulse = Math.max(500, Math.min(2500, Math.round(pulse)));
+    svSlider.value = pulse;
+    svPulse.textContent = pulse;
+    var now = Date.now();
+    if (now - svLastMoveSent > 60) {
+        svLastMoveSent = now;
+        sendMove(pulse);
+    }
+}
+
+svSlider.oninput = function() { moveTo(this.value); };
+svSlider.onchange = function() { sendMove(this.value); };
+
+function nudge(delta) { moveTo(parseInt(svSlider.value) + delta); }
+
+function goFirmware(which) {
+    var s = svCurrent();
+    if (!s) return;
+    moveTo(s[which]);
+    sendMove(s[which]);
+}
+
+function setMin() { svMeasuredMin = parseInt(svSlider.value); refreshMeasured(); }
+function setMax() { svMeasuredMax = parseInt(svSlider.value); refreshMeasured(); }
+
+function relax() {
+    fetch('/api/servorelax?idx=' + svIdx + '&');
+}
+
+loadServos();
+)JS"),
+};
+
+WAPI servoListAPI("/api/servolist", [](Print& out, String query) {
+    String json = "[";
+    for (uint8_t i = 0; i < kServoTesterCount; i++)
+    {
+        if (i) json += ",";
+        json += "{\"name\":\"" + String(kServoTesterNames[i]) + "\"";
+        json += ",\"pin\":" + String((int)pgm_read_word(&servoSettings[i].pinNum));
+        json += ",\"start\":" + String((int)pgm_read_word(&servoSettings[i].startPulse));
+        json += ",\"end\":" + String((int)pgm_read_word(&servoSettings[i].endPulse));
+        json += "}";
+    }
+    json += "]";
+    out.println("HTTP/1.0 200 OK");
+    out.println("Content-type:application/json");
+    out.println("Cache-Control: no-cache");
+    out.println("Connection: close");
+    out.print("Content-Length:"); out.println(json.length());
+    out.println();
+    out.print(json);
+});
+
+// Moves servo `idx` straight to raw pulse `pulse`, bypassing its configured
+// startPulse/endPulse clamp for the duration of the move so the tester can
+// probe the servo's full hardware range.
+WAPI servoMoveAPI("/api/servomove", [](Print& out, String query) {
+    int idx = webQueryParamInt(query, "idx", -1);
+    int pulse = webQueryParamInt(query, "pulse", -1);
+    String json;
+    if (idx < 0 || idx >= kServoTesterCount || pulse < 0)
+    {
+        json = "{\"ok\":false,\"reason\":\"bad request\"}";
+    }
+    else if (dome_eStopActive)
+    {
+        json = "{\"ok\":false,\"reason\":\"ESTOP active - send DM:RESET\"}";
+    }
+    else if (dome_seqRunning)
+    {
+        json = "{\"ok\":false,\"reason\":\"a dome sequence is running\"}";
+    }
+    else
+    {
+        if (pulse < 500) pulse = 500;
+        if (pulse > 2500) pulse = 2500;
+        uint16_t origStart = servoDispatch.getStart(idx);
+        uint16_t origEnd = servoDispatch.getEnd(idx);
+        servoDispatch.setStart(idx, 500);
+        servoDispatch.setEnd(idx, 2500);
+        servoDispatch.moveToPulse(idx, 0, (uint16_t)pulse);
+        servoDispatch.setStart(idx, origStart);
+        servoDispatch.setEnd(idx, origEnd);
+        json = "{\"ok\":true}";
+    }
+    out.println("HTTP/1.0 200 OK");
+    out.println("Content-type:application/json");
+    out.println("Cache-Control: no-cache");
+    out.println("Connection: close");
+    out.print("Content-Length:"); out.println(json.length());
+    out.println();
+    out.print(json);
+});
+
+// Releases the state machine's hold on `idx` (still holds position under power).
+WAPI servoRelaxAPI("/api/servorelax", [](Print& out, String query) {
+    int idx = webQueryParamInt(query, "idx", -1);
+    if (idx >= 0 && idx < kServoTesterCount)
+        servoDispatch.disable(idx);
+    String json = "{\"ok\":true}";
+    out.println("HTTP/1.0 200 OK");
+    out.println("Content-type:application/json");
+    out.println("Cache-Control: no-cache");
+    out.println("Connection: close");
+    out.print("Content-Length:"); out.println(json.length());
+    out.println();
+    out.print(json);
+});
+
 //////////////////////////////////////////////////////////////////
 
 WPage pages[] = {
@@ -508,8 +766,12 @@ WPage pages[] = {
       WPage("/remote", remoteContents, SizeOfArray(remoteContents)),
       WPage("/firmware", firmwareContents, SizeOfArray(firmwareContents)),
       WPage("/console", consoleContents, SizeOfArray(consoleContents), "Console"),
+      WPage("/servotester", servoTesterContents, SizeOfArray(servoTesterContents), "Servo Tester"),
     consoleLogAPI,
     consoleSendAPI,
+    servoListAPI,
+    servoMoveAPI,
+    servoRelaxAPI,
         WUpload("/upload/firmware",
             [](Client& client)
             {

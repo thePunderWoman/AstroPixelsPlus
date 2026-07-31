@@ -560,6 +560,8 @@ static void domeFlutter()
     domeWaitTime(20);
     domeMove(PP5, DOME_PANEL_CLOSE, DOME_MOVE_SPEED, true);
 
+    domeSendToBody("FLUTTER");
+
     domeWaitTime(500);
 
     servoDispatch.disable(PP1); servoDispatch.disable(PP2);
@@ -858,18 +860,40 @@ static void domeHelloThere()
 // =============================================================================
 static void domeLeiaMode()
 {
+    domeBeginSequence(3);
+
+    CommandEvent::process(F("HPS101|3")); // front holo leia sequence
+    CommandEvent::process(F("HPR02|3")); // rear holo off
+    CommandEvent::process(F("HPT02|3")); // top holo off
+    
+    FLD.selectSequence(LogicEngineRenderer::LEIA, FLD.kDefault, 0, 3);
+    RLD.selectSequence(LogicEngineRenderer::LEIA, RLD.kDefault, 0, 3);
+    
+    COMMAND_SERIAL.println("4T6|3");
+    COMMAND_SERIAL.println("5T6|3");
+    domeSendToBody("LEIA");
+    domeWaitTime(500);
+
+    domeEndSequence();
+}
+
+// =============================================================================
+// Leia Full — front HP runs Leia LED sequence, all other HPs off, logics Leia mode
+// =============================================================================
+static void domeLeiaModeFull()
+{
     domeBeginSequence(36);
 
     CommandEvent::process(F("HPS101|36")); // front holo leia sequence
     CommandEvent::process(F("HPR02|36")); // rear holo off
     CommandEvent::process(F("HPT02|36")); // top holo off
-    
+
     FLD.selectSequence(LogicEngineRenderer::LEIA, FLD.kDefault, 0, 36);
     RLD.selectSequence(LogicEngineRenderer::LEIA, RLD.kDefault, 0, 36);
     
     COMMAND_SERIAL.println("4T6|36");
     COMMAND_SERIAL.println("5T6|36");
-    domeSendToBody("LEIA");
+    domeSendToBody("LEIAFULL");
     domeWaitTime(500);
 
     domeEndSequence();
@@ -1029,6 +1053,7 @@ MARCDUINO_ACTION(DomePies,      DM:PIES,        ({ if (!dome_seqRunning && !dome
 MARCDUINO_ACTION(DomeLow,       DM:LOW,         ({ if (!dome_seqRunning && !dome_eStopActive) domeOpenCloseLow();  }))
 MARCDUINO_ACTION(DomeOpenAll,   DM:OPENALL,     ({ if (!dome_seqRunning && !dome_eStopActive) domeOpenCloseAll();  }))
 MARCDUINO_ACTION(DomeLeia,      DM:LEIA,        ({ if (!dome_seqRunning && !dome_eStopActive) domeLeiaMode();      }))
+MARCDUINO_ACTION(DomeLeiaFull,  DM:LEIAFULL,    ({ if (!dome_seqRunning && !dome_eStopActive) domeLeiaModeFull();  }))
 MARCDUINO_ACTION(DomeHeart,     DM:HEART,       ({ if (!dome_seqRunning && !dome_eStopActive) domeHeart();         }))
 MARCDUINO_ACTION(DomeHello,     DM:HELLO,       ({ if (!dome_seqRunning && !dome_eStopActive) domeHelloThere();    }))
 MARCDUINO_ACTION(DomeScream,    DM:SCREAM,      ({ if (!dome_seqRunning && !dome_eStopActive) domeScream();        }))
